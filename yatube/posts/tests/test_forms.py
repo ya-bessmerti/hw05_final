@@ -132,7 +132,7 @@ class PostCreateFormTests(TestCase):
         response = self.authorized_client.get(reverse('posts:index'))
         post = response.context['page_obj'][0].image.name
         self.assertEqual(post, 'posts/small.gif')
-    
+
     def test_img_context_profile(self):
         """Шаблон profile сформирован с картинкой."""
         response = (self.authorized_client.get(
@@ -140,7 +140,7 @@ class PostCreateFormTests(TestCase):
                     kwargs={'username': self.user})))
         post = response.context['page_obj'][0].image.name
         self.assertEqual(post, 'posts/small.gif')
-    
+
     def test_img_context_group(self):
         """Шаблон group сформирован с картинкой."""
         response = (self.authorized_client.get(

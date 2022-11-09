@@ -155,14 +155,13 @@ class PostPagesTests(TestCase):
         for object in response.context['page_obj']:
             post_slug = object.group_slug
             self.assertNotEqual(post_slug, self.group.slug)
-    
+
     def test_cache_index(self):
         response = self.authorized_client.get(reverse('posts:index'))
         post_deleted = Post.objects.get(id=1)
         post_deleted.delete()
         response_anoth = self.authorized_client.get(reverse('posts:index'))
         self.assertTrue(response.content == response_anoth.content)
-
 
     def test_user_follow(self):
         """Авторизованный пользователь может подписываться
