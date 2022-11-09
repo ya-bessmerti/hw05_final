@@ -111,24 +111,23 @@ def add_comment(request, post_id):
 
 # posts/views.py
 
-@login_required(login_url='/auth/login/')
+@login_required
 def follow_index(request):
     posts = Post.objects.filter(author__following__user=request.user)
     context = {
         'page_obj': paginator_method(posts, request),
     }
-    context = {}
     return render(request, 'posts/follow.html', context)
 
-@login_required(login_url='/auth/login/')
+@login_required
 def profile_follow(request, username):
     follower = User.objects.get(username=username)
     if not request.user == follower:
         Follow.objects.get_or_create(user=request.user, author=follower)
     return redirect('posts:follow_index')
 
-@login_required(login_url='/auth/login/')
+@login_required
 def profile_unfollow(request, username):
-    follower = get_object_or_404(User, username=username)
+    follower = User.objects.get(username=username)
     Follow.objects.filter(user=request.user, author=follower).delete()
     return redirect('posts:follow_index')

@@ -14,6 +14,12 @@ class PostPagesTests(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.create_user(username='User_test')
+        cls.user_follow = User.objects.create_user(
+            username='myuser_follow'
+        )
+        cls.user_follow_feed = User.objects.create_user(
+            username='myuser_follow_feed'
+        )
         cls.group_slug = 'user_test_slug'
         cls.group = Group.objects.create(
             title='Тестовая группа',
@@ -31,6 +37,10 @@ class PostPagesTests(TestCase):
         # Создаем авторизованный клиент
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
+        self.authorized_client_feed = Client()
+        self.authorized_client_feed.force_login(self.user_follow)
+        self.auth_client_feed = Client()
+        self.auth_client_feed.force_login(self.user_follow_feed)
 
     def test_pages_users_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -152,6 +162,77 @@ class PostPagesTests(TestCase):
         post_deleted.delete()
         response_anoth = self.authorized_client.get(reverse('posts:index'))
         self.assertTrue(response.content == response_anoth.content)
+
+
+    def test_user_follow(self):
+        """Авторизованный пользователь может подписываться
+        на других пользователей и удалять их из подписок.
+        """
+        self.authorized_client.get(
+            reverse(
+                'posts:profile_follow',
+                kwargs={'username': self.user_follow}
+            )
+        )
+        response_profile = (
+            self.authorized_client.get(
+                reverse(
+                    'posts:profile',
+                    kwargs={'username': self.user_follow}
+                )
+            )
+        )
+        follow = response_profile.context
+        self.assertEqual(follow['following'], True)
+
+        self.authorized_client.get(
+            reverse(
+                'posts:profile_unfollow',
+                kwargs={'username': self.user_follow}
+            )
+        )
+
+        response_profile = (
+            self.authorized_client.get(
+                reverse(
+                    'posts:profile',
+                    kwargs={'username': self.user_follow}
+                )
+            )
+        )
+        follow = response_profile.context
+        self.assertEqual(follow['following'], False)
+
+    def test_follow_feed(self):
+        """Новая запись пользователя появляется
+        в ленте тех, кто на него подписан и не
+        появляется в ленте тех, кто не подписан.
+        """
+        self.authorized_client_feed.get(
+            reverse(
+                'posts:profile_follow',
+                kwargs={'username': self.user}
+            )
+        )
+        response_index = (
+            self.authorized_client_feed.get(
+                reverse(
+                    'posts:follow_index'
+                )
+            )
+        )
+        follow_index = response_index.context['page_obj'][0]
+        self.assertEqual(follow_index.text, 'Тестовый пост')
+
+        response_index_unfollow = (
+            self.auth_client_feed.get(
+                reverse(
+                    'posts:follow_index'
+                )
+            )
+        )
+        follow_index_feed = response_index_unfollow.context['page_obj']
+        self.assertEqual(len(follow_index_feed), 0)
 
 
 class PaginatorTest(TestCase):
