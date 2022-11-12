@@ -170,7 +170,7 @@ class FollowTests(TestCase):
         cls.user_follower = User.objects.create_user(
             username='myuser_follower'
         )
-        cls.following= Follow.objects.create(
+        cls.following = Follow.objects.create(
             user=cls.user_follower,
             author=cls.user,
         )
