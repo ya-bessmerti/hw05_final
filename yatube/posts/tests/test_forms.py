@@ -1,15 +1,14 @@
 import shutil
 import tempfile
 
-from django.contrib.auth import get_user_model
-from django.test import Client, TestCase
-from django.urls import reverse
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
+from django.urls import reverse
 
 from posts.forms import PostForm
-from posts.models import Group, Post, Comment
+from posts.models import Comment, Group, Post
 
 User = get_user_model()
 
@@ -100,32 +99,27 @@ class PostCreateFormTests(TestCase):
 
     def test_edit_post(self):
         """Валидная форма редактирует запись в Post."""
-        post = Post.objects.create(
-            author=self.user,
-            text='Тестовая запись',
-            group=self.group,
-        )
         posts_count = Post.objects.count()
         form_data = {
             'text': 'Отредактированный тестовая запись через форму',
             'group': self.second_group.pk,
         }
         response = self.authorized_client.post(
-            reverse('posts:post_edit', kwargs={'post_id': post.pk}),
+            reverse('posts:post_edit', kwargs={'post_id': self.post.pk}),
             data=form_data,
             follow=True,
         )
         self.assertRedirects(
             response,
             reverse(
-                'posts:post_detail', kwargs={'post_id': post.pk}
+                'posts:post_detail', kwargs={'post_id': self.post.pk}
             ),
         )
         self.assertEqual(Post.objects.count(), posts_count)
-        edited_post = Post.objects.get(pk=post.pk)
+        edited_post = Post.objects.get(pk=self.post.pk)
         self.assertEqual(edited_post.text, form_data['text'])
         self.assertEqual(edited_post.group.pk, form_data['group'])
-        self.assertEqual(edited_post.author, post.author)
+        self.assertEqual(edited_post.author, self.post.author)
 
     def test_img_context_index(self):
         """Шаблон index сформирован с картинкой."""
@@ -135,25 +129,40 @@ class PostCreateFormTests(TestCase):
 
     def test_img_context_profile(self):
         """Шаблон profile сформирован с картинкой."""
-        response = (self.authorized_client.get(
-            reverse('posts:profile',
-                    kwargs={'username': self.user})))
+        response = (
+            self.authorized_client.get(
+                reverse(
+                    'posts:profile',
+                    kwargs={'username': self.user},
+                )
+            )
+        )
         post = response.context['page_obj'][0].image.name
         self.assertEqual(post, 'posts/small.gif')
 
     def test_img_context_group(self):
         """Шаблон group сформирован с картинкой."""
-        response = (self.authorized_client.get(
-            reverse('posts:group_list',
-                    kwargs={'slug': self.group.slug})))
+        response = (
+            self.authorized_client.get(
+                reverse(
+                    'posts:group_list',
+                    kwargs={'slug': self.group.slug},
+                )
+            )
+        )
         post = response.context['page_obj'][0].image.name
         self.assertEqual(post, 'posts/small.gif')
 
     def test_img_context_detail(self):
         """Шаблон detail сформирован с картинкой."""
-        response = (self.authorized_client.get(
-            reverse('posts:post_detail',
-                    kwargs={'post_id': '1'})))
+        response = (
+            self.authorized_client.get(
+                reverse(
+                    'posts:post_detail',
+                    kwargs={'post_id': self.post.pk},
+                )
+            )
+        )
         post = response.context['post'].image.name
         self.assertEqual(post, 'posts/small.gif')
 
@@ -185,15 +194,22 @@ class CommentFormTests(TestCase):
         form_data = {
             'text': 'Текст комментария',
         }
-        self.authorized_client.post(
+        response = self.authorized_client.post(
             reverse(
                 'posts:add_comment',
                 kwargs={'post_id': self.post.id, },
             ), data=form_data, follow=True
         )
+        self.assertRedirects(
+            response,
+            reverse(
+                'posts:post_detail', kwargs={'post_id': self.post.pk}
+            ),
+        )
         self.assertEqual(Comment.objects.count(), comment_count + 1)
         last_comment = Comment.objects.last()
         self.assertEqual(last_comment.text, form_data['text'])
+        self.assertEqual(self.post.author, self.post.author)
 
     def test_guest_client_could_not_create_comments(self):
         """Неавторизованный пользователь не может комментировать посты."""
@@ -207,8 +223,11 @@ class CommentFormTests(TestCase):
                 kwargs={'post_id': self.post.id, },
             ), data=form_data, follow=True
         )
-        expected_redirect = str(reverse('users:login') + '?next='
-                                + reverse('posts:add_comment',
-                                          kwargs={'post_id': self.post.id, }))
+        expected_redirect = str(
+            reverse('users:login') + '?next=' + reverse(
+                'posts:add_comment',
+                kwargs={'post_id': self.post.id, },
+            )
+        )
         self.assertRedirects(response, expected_redirect)
         self.assertEqual(Comment.objects.count(), comment_count)

@@ -3,7 +3,6 @@ from django.db import models
 
 from core.models import CreatedModel
 
-
 User = get_user_model()
 
 

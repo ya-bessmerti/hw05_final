@@ -1,10 +1,12 @@
+from http import HTTPStatus
+
+from django import forms
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import Client, TestCase
 from django.urls import reverse
-from django import forms
 
-from posts.models import Post, Group
+from posts.models import Group, Post, Follow
 
 User = get_user_model()
 
@@ -14,12 +16,6 @@ class PostPagesTests(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.create_user(username='User_test')
-        cls.user_follow = User.objects.create_user(
-            username='myuser_follow'
-        )
-        cls.user_follow_feed = User.objects.create_user(
-            username='myuser_follow_feed'
-        )
         cls.group_slug = 'user_test_slug'
         cls.group = Group.objects.create(
             title='Тестовая группа',
@@ -37,10 +33,6 @@ class PostPagesTests(TestCase):
         # Создаем авторизованный клиент
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
-        self.authorized_client_feed = Client()
-        self.authorized_client_feed.force_login(self.user_follow)
-        self.auth_client_feed = Client()
-        self.auth_client_feed.force_login(self.user_follow_feed)
 
     def test_pages_users_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -83,6 +75,13 @@ class PostPagesTests(TestCase):
         response = self.authorized_client.get(reverse('posts:index'))
         test_object = response.context['page_obj'][0]
         self.check_post_context_on_page(test_object)
+
+    def test_cache_index(self):
+        response = self.authorized_client.get(reverse('posts:index'))
+        post_deleted = Post.objects.get(id=1)
+        post_deleted.delete()
+        response_anoth = self.authorized_client.get(reverse('posts:index'))
+        self.assertEqual(response.content, response_anoth.content)
 
     def test_posts_group_page_show_correct_context(self):
         """Шаблон group_list сформирован с правильным контекстом."""
@@ -156,82 +155,87 @@ class PostPagesTests(TestCase):
             post_slug = object.group_slug
             self.assertNotEqual(post_slug, self.group.slug)
 
-    def test_cache_index(self):
-        response = self.authorized_client.get(reverse('posts:index'))
-        post_deleted = Post.objects.get(id=1)
-        post_deleted.delete()
-        response_anoth = self.authorized_client.get(reverse('posts:index'))
-        self.assertTrue(response.content == response_anoth.content)
+
+class FollowTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = User.objects.create_user(username='User_test')
+        cls.group_slug = 'user_test_slug'
+        cls.group = Group.objects.create(
+            title='Тестовая группа',
+            slug=cls.group_slug,
+            description='Тестовое описание',
+        )
+        cls.user_follower = User.objects.create_user(
+            username='myuser_follower'
+        )
+        cls.following= Follow.objects.create(
+            user=cls.user_follower,
+            author=cls.user,
+        )
+
+    def setUp(self):
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.user_follower)
 
     def test_user_follow(self):
         """Авторизованный пользователь может подписываться
-        на других пользователей и удалять их из подписок.
+        на других пользователей.
         """
-        self.authorized_client.get(
+        Follow.objects.all().delete()
+        follow_count_1 = Follow.objects.count()
+        follow = Follow.objects.filter(
+            author=self.user,
+            user=self.user_follower,
+        )
+        self.assertEqual(follow.first(), None)
+        response = self.authorized_client.get(
             reverse(
                 'posts:profile_follow',
-                kwargs={'username': self.user_follow}
+                args=(self.user.username,)
             )
         )
-        response_profile = (
-            self.authorized_client.get(
-                reverse(
-                    'posts:profile',
-                    kwargs={'username': self.user_follow}
-                )
-            )
-        )
-        follow = response_profile.context
-        self.assertEqual(follow['following'], True)
+        follow_count_2 = Follow.objects.count()
+        self.assertEqual(follow_count_2, follow_count_1 + 1)
+        follow = Follow.objects.first()
+        self.assertEqual(Follow.objects.count(), 1)
+        self.assertEqual(follow.author, self.user)
+        self.assertEqual(follow.user, self.user_follower)
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
 
+    def test_user_unfollow(self):
+        """Авторизованный пользователь может  отписываться
+        от других пользователей.
+        """
+        self.assertEqual(self.user.following.count(), 1)
         self.authorized_client.get(
             reverse(
                 'posts:profile_unfollow',
-                kwargs={'username': self.user_follow}
+                args=(self.user.username,)
             )
         )
-
-        response_profile = (
-            self.authorized_client.get(
-                reverse(
-                    'posts:profile',
-                    kwargs={'username': self.user_follow}
-                )
-            )
-        )
-        follow = response_profile.context
-        self.assertEqual(follow['following'], False)
+        self.assertEqual(self.user.following.count(), 0)
 
     def test_follow_feed(self):
         """Новая запись пользователя появляется
-        в ленте тех, кто на него подписан и не
-        появляется в ленте тех, кто не подписан.
+        в ленте тех, кто на него подписан.
         """
-        self.authorized_client_feed.get(
-            reverse(
-                'posts:profile_follow',
-                kwargs={'username': self.user}
-            )
+        Post.objects.all().delete()
+        self.assertEqual(Post.objects.count(), 0)
+        new_user = User.objects.create_user(
+            username='New_user'
         )
-        response_index = (
-            self.authorized_client_feed.get(
-                reverse(
-                    'posts:follow_index'
-                )
-            )
+        Post.objects.create(
+            author=new_user,
+            text='Новый пост'
         )
-        follow_index = response_index.context['page_obj'][0]
-        self.assertEqual(follow_index.text, 'Тестовый пост')
-
-        response_index_unfollow = (
-            self.auth_client_feed.get(
-                reverse(
-                    'posts:follow_index'
-                )
-            )
+        response = self.authorized_client.get(reverse(
+            'posts:follow_index')
         )
-        follow_index_feed = response_index_unfollow.context['page_obj']
-        self.assertEqual(len(follow_index_feed), 0)
+        self.assertEqual(len(
+            response.context['page_obj']), 0
+        )
 
 
 class PaginatorTest(TestCase):

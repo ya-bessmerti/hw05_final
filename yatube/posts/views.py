@@ -1,12 +1,11 @@
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.cache import cache_page
 
-from .forms import PostForm, CommentForm
-from .models import Post, Group, Follow
-
+from .forms import CommentForm, PostForm
+from .models import Follow, Group, Post
 
 POSTS_IN_PAGE = 10
 
@@ -43,7 +42,9 @@ def profile(request, username):
     posts = author.posts.all()
     following = (
         request.user.is_authenticated and Follow.objects.filter(
-            user=request.user.pk, author=author).exists())
+            user=request.user.pk, author=author
+        ).exists()
+    )
     context = {
         'author': author,
         'page_obj': paginator_method(posts, request),
