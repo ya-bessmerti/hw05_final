@@ -209,7 +209,6 @@ class FollowTests(TestCase):
         self.assertEqual(follow.author, self.user)
         self.assertEqual(follow.user, self.user_follower)
 
-
     def test_user_unfollow(self):
         """Авторизованный пользователь может  отписываться
         от других пользователей.
@@ -225,7 +224,7 @@ class FollowTests(TestCase):
 
     def test_follow(self):
         """
-        Новая запись пользователя появляется 
+        Новая запись пользователя появляется
         в ленте c подпиской.
         """
         Post.objects.all().delete()
