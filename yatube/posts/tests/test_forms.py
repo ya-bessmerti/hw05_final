@@ -190,6 +190,7 @@ class CommentFormTests(TestCase):
 
     def test_authorized_client_can_create_comments(self):
         """Авторизованный пользователь может комментировать посты."""
+        post_count = Post.objects.count()
         comment_count = Comment.objects.count()
         form_data = {
             'text': 'Текст комментария',
@@ -210,6 +211,11 @@ class CommentFormTests(TestCase):
         last_comment = Comment.objects.last()
         self.assertEqual(last_comment.text, form_data['text'])
         self.assertEqual(self.post.author, self.post.author)
+        self.assertEqual(Post.objects.count(), post_count)
+        last_post = Post.objects.last()
+        self.assertEqual(last_post.text, self.post.text)
+        self.assertEqual(last_post.group, self.post.group)
+        self.assertEqual(last_post.author, self.post.author)
 
     def test_guest_client_could_not_create_comments(self):
         """Неавторизованный пользователь не может комментировать посты."""

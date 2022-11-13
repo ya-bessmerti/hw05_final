@@ -78,10 +78,15 @@ class PostPagesTests(TestCase):
 
     def test_cache_index(self):
         response = self.authorized_client.get(reverse('posts:index'))
-        post_deleted = Post.objects.get(id=1)
+        post_deleted = Post.objects.get(id=self.post.pk)
         post_deleted.delete()
         response_anoth = self.authorized_client.get(reverse('posts:index'))
         self.assertEqual(response.content, response_anoth.content)
+        cache.clear()
+        response_other = self.authorized_client.get(
+            reverse('posts:index')
+        )
+        self.assertNotEqual(response.content, response_other.content)
 
     def test_posts_group_page_show_correct_context(self):
         """Шаблон group_list сформирован с правильным контекстом."""
@@ -196,13 +201,14 @@ class FollowTests(TestCase):
                 args=(self.user.username,)
             )
         )
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
         follow_count_2 = Follow.objects.count()
         self.assertEqual(follow_count_2, follow_count_1 + 1)
         follow = Follow.objects.first()
         self.assertEqual(Follow.objects.count(), 1)
         self.assertEqual(follow.author, self.user)
         self.assertEqual(follow.user, self.user_follower)
-        self.assertEqual(response.status_code, HTTPStatus.FOUND)
+
 
     def test_user_unfollow(self):
         """Авторизованный пользователь может  отписываться
@@ -217,9 +223,34 @@ class FollowTests(TestCase):
         )
         self.assertEqual(self.user.following.count(), 0)
 
-    def test_follow_feed(self):
-        """Новая запись пользователя появляется
-        в ленте тех, кто на него подписан.
+    def test_follow(self):
+        """
+        Новая запись пользователя появляется 
+        в ленте c подпиской.
+        """
+        Post.objects.all().delete()
+        self.assertEqual(Post.objects.count(), 0)
+        new_post = Post.objects.create(
+            author=self.user,
+            text='Новый пост'
+        )
+        response = self.authorized_client.get(reverse(
+            'posts:follow_index')
+        )
+        self.assertEqual(
+            new_post,
+            response.context['page_obj'][0],
+        )
+        self.assertEqual(len(
+            response.context.get('page_obj')), 1
+        )
+        post = response.context['post']
+        self.assertEqual(post.text, new_post.text)
+        self.assertEqual(post.author, new_post.author)
+
+    def test_not_follow(self):
+        """Новая запись пользователя не появляется
+        в ленте без подписки.
         """
         Post.objects.all().delete()
         self.assertEqual(Post.objects.count(), 0)
