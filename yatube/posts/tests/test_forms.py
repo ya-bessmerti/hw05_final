@@ -210,12 +210,9 @@ class CommentFormTests(TestCase):
         self.assertEqual(Comment.objects.count(), comment_count + 1)
         last_comment = Comment.objects.last()
         self.assertEqual(last_comment.text, form_data['text'])
-        self.assertEqual(self.post.author, self.post.author)
+        self.assertEqual(last_comment.author, self.user)
         self.assertEqual(Post.objects.count(), post_count)
-        last_post = Post.objects.last()
-        self.assertEqual(last_post.text, self.post.text)
-        self.assertEqual(last_post.group, self.post.group)
-        self.assertEqual(last_post.author, self.post.author)
+
 
     def test_guest_client_could_not_create_comments(self):
         """Неавторизованный пользователь не может комментировать посты."""
